@@ -16,100 +16,77 @@ dis = pygame.display.set_mode((XSIZE, YSIZE))
 pygame.display.update()
 pygame.display.set_caption("Snake Game")
 
-def setMoveState(event, x):
-    if event.key == pygame.K_LEFT:
-        state = 0
-    elif event.key == pygame.K_RIGHT:
-        state = 1
-    elif event.key == pygame.K_UP:
-        state = 2
-    elif event.key == pygame.K_DOWN:
-        state = 3
-    else:
-        state = x
-    return state
 
 
 green = (0, 255, 0)
 red = (255, 0, 0)
 purple = (128, 0, 128)
 black = (0, 0, 0)
-white = (255, 255, 255)
-
-xspeed = 5
-yspeed = 0
-px = 200
-py = 200
-
-quitGame = False
-gameOver = False
-
-
-font = pygame.font.Font('freesansbold.ttf', 20)
-gameOverText = font.render("Game Over!", black, purple)
-centerRect = gameOverText.get_rect()
-centerRect.center = (XSIZE/2, YSIZE/2)
-
-state = 0
 
 clock = pygame.time.Clock()
-state = 0
 
 class Snake:
     def __init__(self):
-        self.snakeLength = 2
-        self.snakeList = []
+        self.snakeLength = 4
+        self.snakeList = []         #list to keep track of the "blocks" currently in snake object
         self.foodLocation = [0, 0]
-        self.x = XSIZE/2
-        self.y = YSIZE/2
-        self.counter = 0
-        self.head = [self.x, self.y]
-        self.snakeList.append(self.head)
-        self.lastFood = 0
+        self.counter = 0            #total lifetime of snake
+        self.head = [XSIZE/2, YSIZE/2]
+        self.snakeList.append(copy.deepcopy(self.head))
+        self.lastFood = 0           #incremented every time the snakes moves, resets when food is collected
+        self.state = 0              #keeps track of which direction the snake was moving previously (don't think this is necessary, but put it in so that 
+                                    #the direction only changes when the activation function is above some value.
         self.outputFood()
 
 
-    def move(self, gameOver, net):
-        gameOver = False
+    def move(self, net, ge):
+        gameOver = False                #gameOver flag, default false.
 
-        inputs = self.distances()
-        output = net.activate(inputs)
-        state = output.index(max(output))
+        inputs = self.distances()       #array of 24 inputs, calculates the distance to the walls, food, and its own body in pixels (not grid). 
+        output = net.activate(inputs)   
+        
+        for i, val in enumerate(output):
+            if val > 0.5:
+                self.state = i
 
-        xspeed, yspeed = 5, 0
-        if (state == 0):
-            xspeed = -5
+
+        xspeed, yspeed = 10, 0
+        if (self.state == 0):           #change the direction depending on the state, which the activate function changes
+            xspeed = -10
             yspeed = 0
-        if (state == 1):
-            xspeed = 5
+        if (self.state == 1):
+            xspeed = 10
             yspeed = 0
-        if (state == 2):
+        if (self.state == 2):
             xspeed = 0
-            yspeed = -5
-        if (state == 3):
+            yspeed = -10
+        if (self.state == 3):
             xspeed = 0
-            yspeed = 5
-        self.x += xspeed * 2
-        self.y += yspeed * 2
+            yspeed = 10
 
-        self.head = [self.x, self.y]
-        self.snakeList.append(self.head)
+        self.head[0] += xspeed
+        self.head[1] += yspeed
+
+        self.snakeList.append(copy.deepcopy(self.head))
         self.counter += 1
         self.lastFood += 1
 
-        for i in self.snakeList[:-1]:
+        for i in self.snakeList[:-1]:               #snake collides with itself (last element is head)
             if i == self.head:
                 gameOver = True
 
-        if self.head == self.foodLocation:
+        if self.head == self.foodLocation:          #upon collecting food
             self.snakeLength += 1
             self.lastFood = 0
             self.outputFood()
 
-        if len(self.snakeList) > self.snakeLength:
+        if len(self.snakeList) > self.snakeLength:  #delete the tail if the current length is larger than the object's score variable
             del self.snakeList[0]
 
-        if (self.x < 0 or self.x >= XSIZE) or (self.y < 0 or self.y >= YSIZE):
+        if (self.head[0] < 0 or self.head[0] >= XSIZE) or (self.head[1] < 0 or self.head[1] >= YSIZE): #bounds check
+            gameOver = True
+
+        if self.lastFood > 125:                     #"hunger", preventing snake from looping and gaining fitness
             gameOver = True
 
         return gameOver
@@ -126,7 +103,7 @@ class Snake:
         x, y = 0, 0
         isCollide = True
         while (isCollide):
-            x = random.randrange(0, XSIZE/10)
+            x = random.randrange(0, XSIZE/10)           #randomly generate food location until it is not inside current snake
             y = random.randrange(0, YSIZE/10)
             for i in self.snakeList:
                 if x == i[0] and y == i[1]:
@@ -137,20 +114,16 @@ class Snake:
         self.foodLocation[0] = x * 10
         self.foodLocation[1] = y * 10
 
-    def distances(self):
+    def distances(self):                                #output 24 distances to feed into activation function
         out = []
 
-        d = copy.deepcopy(self.head)
-        c = copy.deepcopy(d)
-        b = copy.deepcopy(d)
-
         for i in range(8):
-            d = copy.deepcopy(self.head)
+            d = copy.deepcopy(self.head)                #is there a better way to do this than to make deep copies?
             c = copy.deepcopy(d)
             b = copy.deepcopy(d)
             isBlock = False
             isFood = False
-            while (d[0] >= 0 and d[0] <= XSIZE) and (d[1] >= 0 and d[1] <= YSIZE):
+            while (d[0] >= 0 and d[0] <= XSIZE) and (d[1] >= 0 and d[1] <= YSIZE): #iterate until out of bounds
                 if (i == 0):
                     d[0] += 10
                 elif (i == 1):
@@ -173,10 +146,10 @@ class Snake:
                     d[1] -= 10
                 for blocks in self.snakeList:
                     if blocks == d:
-                        c = copy.deepcopy(d)
+                        c = copy.deepcopy(d)            #copy value and set a flag
                         isBlock = True
                         break
-                if d == self.foodLocation:
+                if d == self.foodLocation:              
                     b = copy.deepcopy(d)
                     isFood = True
             out.append(math.dist(self.head, d))
@@ -184,12 +157,14 @@ class Snake:
                 c = d
             if not isFood:
                 b = d
+            else:
+                isFoodBit = 1
             out.append(math.dist(self.head, c))
-            out.append(math.dist(self.head, b))
+            out.append(math.dist(self.head, b))      #outputs 24 values, always in the same order wall, self, food. variable names could be better.
 
         return out
     
-    def getCount(self):
+    def getCount(self):                             #various accessor functions used for testing different fitness functions.
         return self.counter
 
     def getLength(self):
@@ -197,6 +172,12 @@ class Snake:
 
     def getLastFood(self):
         return self.lastFood
+
+    def getHead(self):
+        return self.head
+
+    def getFoodLocation(self):
+        return self.foodLocation
 
 
 
@@ -210,15 +191,15 @@ def eval_genomes(genomes, config):
 
     gen += 1
 
-    nets = []
+    nets = []           #three arrays to hold the networks, genomes, and snakes themselves.
     ge = []
     snakes = []
 
     for genome_id, genome in genomes:
-        net = neat.nn.feed_forward.FeedForwardNetwork.create(genome, config)
+        genome.fitness = 0
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
         nets.append(net)
         snakes.append(Snake())
-        genome.fitness = 0
         ge.append(genome)
 
     gameOver = False
@@ -226,25 +207,23 @@ def eval_genomes(genomes, config):
     while len(snakes) > 0:
         gameOver = False
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+            if event.type == pygame.QUIT:                       
                 pygame.quit()
                 quit()
-            if event.type == pygame.KEYDOWN:
+            if event.type == pygame.KEYDOWN:                    #you can use arrow keys to slow down or speed up the simulation speed.
                 if event.key == pygame.K_LEFT:
                     tdelay -= 5
                 if event.key == pygame.K_RIGHT:
                     tdelay += 5
 
         j = 0
-        while j < len(snakes):
-            gameOver = snakes[j].move(gameOver, nets[j])
-            if (snakes[j].getLastFood() > 100):
-                gameOver = True
+        while j < len(snakes):                                  #iterate through the snake list one time
+            gameOver = snakes[j].move(nets[j], ge[j])           #move the snake and return gameOver
 
-            if gameOver:
-                length = snakes[j].getLength() - 1
+            if gameOver:                                        #if game over, calculate fitness and pop all lists. don't increment j if popping
+                length = snakes[j].getLength() - 4
                 lifetime = snakes[j].getCount()
-                ge[j].fitness = length * 50 + lifetime
+                ge[j].fitness += length
                 snakes.pop(j)
                 nets.pop(j)
                 ge.pop(j)
@@ -254,7 +233,7 @@ def eval_genomes(genomes, config):
        
 
         dis.fill(black)
-        if len(snakes) > 0:
+        if len(snakes) > 0:                                     #draw the first snake (could also move this to top of while loop to avoid extra line)
             snakes[0].drawSnake()
 
         
