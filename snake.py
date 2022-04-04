@@ -27,11 +27,11 @@ clock = pygame.time.Clock()
 
 class Snake:
     def __init__(self):
-        self.snakeLength = 4
+        self.snakeLength = 2
         self.snakeList = []         #list to keep track of the "blocks" currently in snake object
         self.foodLocation = [0, 0]
         self.counter = 0            #total lifetime of snake
-        self.head = [XSIZE/2, YSIZE/2]
+        self.head = [random.randrange(0, XSIZE/10) * 10, random.randrange(YSIZE/10) * 10]
         self.snakeList.append(copy.deepcopy(self.head))
         self.lastFood = 0           #incremented every time the snakes moves, resets when food is collected
         self.state = 0              #keeps track of which direction the snake was moving previously (don't think this is necessary, but put it in so that 
@@ -74,9 +74,11 @@ class Snake:
         for i in self.snakeList[:-1]:               #snake collides with itself (last element is head)
             if i == self.head:
                 gameOver = True
+                self.counter -= 20
 
         if self.head == self.foodLocation:          #upon collecting food
             self.snakeLength += 1
+            ge.fitness += 2
             self.lastFood = 0
             self.outputFood()
 
@@ -85,9 +87,11 @@ class Snake:
 
         if (self.head[0] < 0 or self.head[0] >= XSIZE) or (self.head[1] < 0 or self.head[1] >= YSIZE): #bounds check
             gameOver = True
+            self.counter -= 20
 
-        if self.lastFood > 125:                     #"hunger", preventing snake from looping and gaining fitness
+        if self.lastFood > 100:                     #"hunger", preventing snake from looping and gaining fitness
             gameOver = True
+            self.counter -= 50
 
         return gameOver
 
@@ -106,7 +110,7 @@ class Snake:
             x = random.randrange(0, XSIZE/10)           #randomly generate food location until it is not inside current snake
             y = random.randrange(0, YSIZE/10)
             for i in self.snakeList:
-                if x == i[0] and y == i[1]:
+                if x * 10 == i[0] and y * 10 == i[1]:
                     isCollide = True
                     break
                 else:
@@ -114,55 +118,46 @@ class Snake:
         self.foodLocation[0] = x * 10
         self.foodLocation[1] = y * 10
 
-    def distances(self):                                #output 24 distances to feed into activation function
-        out = []
-
-        for i in range(8):
-            d = copy.deepcopy(self.head)                #is there a better way to do this than to make deep copies?
-            c = copy.deepcopy(d)
-            b = copy.deepcopy(d)
-            isBlock = False
-            isFood = False
-            while (d[0] >= 0 and d[0] <= XSIZE) and (d[1] >= 0 and d[1] <= YSIZE): #iterate until out of bounds
-                if (i == 0):
-                    d[0] += 10
-                elif (i == 1):
-                    d[0] -= 10
-                elif (i == 2):
-                    d[1] += 10
-                elif (i == 3):
-                    d[1] -= 10
-                elif (i == 4):
-                    d[0] -= 10
-                    d[1] -= 10
-                elif (i == 5):
-                    d[0] -= 10
-                    d[1] += 10
-                elif (i == 6):
-                    d[0] += 10
-                    d[1] += 10
-                elif (i == 7):
-                    d[0] += 10
-                    d[1] -= 10
-                for blocks in self.snakeList:
-                    if blocks == d:
-                        c = copy.deepcopy(d)            #copy value and set a flag
-                        isBlock = True
-                        break
-                if d == self.foodLocation:              
-                    b = copy.deepcopy(d)
-                    isFood = True
-            out.append(math.dist(self.head, d))
-            if not isBlock:
-                c = d
-            if not isFood:
-                b = d
-            else:
-                isFoodBit = 1
-            out.append(math.dist(self.head, c))
-            out.append(math.dist(self.head, b))      #outputs 24 values, always in the same order wall, self, food. variable names could be better.
+    def distances(self):                                
+        out = [
+            self.foodLocation[0] > self.head[0],
+            self.foodLocation[0] < self.head[0],
+            self.foodLocation[1] > self.head[1],
+            self.foodLocation[1] < self.head[1],
+            self.state == 0,
+            self.state == 1,
+            self.state == 2,
+            self.state == 3,
+            self.isDeath(0),
+            self.isDeath(1),
+            self.isDeath(2),
+            self.isDeath(3)
+        ]
+       
+        
 
         return out
+
+    def isDeath(self, s):
+        newPos = copy.deepcopy(self.head)
+        if s == 0:
+            newPos[0] -= 10
+            if newPos[0] < 0 or newPos in self.snakeList:
+                return True
+        elif s == 1:
+            newPos[0] += 10
+            if newPos[0] >= XSIZE or newPos in self.snakeList:
+                return True
+        elif s == 2:
+            newPos[1] -= 10
+            if newPos[1] < 0 or newPos in self.snakeList:
+                return True
+        elif s == 3:
+            newPos[1] += 10
+            if newPos[1] >= YSIZE or newPos in self.snakeList:
+                return True
+        return False
+
     
     def getCount(self):                             #various accessor functions used for testing different fitness functions.
         return self.counter
@@ -221,9 +216,9 @@ def eval_genomes(genomes, config):
             gameOver = snakes[j].move(nets[j], ge[j])           #move the snake and return gameOver
 
             if gameOver:                                        #if game over, calculate fitness and pop all lists. don't increment j if popping
-                length = snakes[j].getLength() - 4
+                length = snakes[j].getLength() - 2
                 lifetime = snakes[j].getCount()
-                ge[j].fitness += length
+                ge[j].fitness += 0.1 * lifetime
                 snakes.pop(j)
                 nets.pop(j)
                 ge.pop(j)
